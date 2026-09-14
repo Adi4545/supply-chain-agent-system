@@ -33,10 +33,14 @@ function renderPlan(data) {
   const d = data.final_decision;
   if (!d) return;
 
-  document.getElementById("kpiInventory").textContent = "3,500";
-  document.getElementById("kpiDemand").textContent = "—";
-  document.getElementById("kpiReorder").textContent = d.order_quantity.toLocaleString();
-  document.getElementById("kpiCost").textContent = "$" + d.expected_cost.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const fmt = (n) => (typeof n === "number" ? n.toLocaleString() : "—");
+  document.getElementById("kpiInventory").textContent = fmt(data.inventory);
+  document.getElementById("kpiDemand").textContent = fmt(data.demand_forecast);
+  document.getElementById("kpiReorder").textContent = fmt(d.order_quantity);
+  document.getElementById("kpiCost").textContent =
+    typeof d.expected_cost === "number"
+      ? "$" + d.expected_cost.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : "—";
   document.getElementById("kpiRisk").textContent = d.risk_level;
   document.getElementById("kpiDelivery").textContent = d.expected_delivery_days + " days";
 

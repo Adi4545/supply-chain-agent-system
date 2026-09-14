@@ -78,7 +78,7 @@ class DemandRecordORM(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     date: Mapped[datetime] = mapped_column(DateTime)
-    product_id: Mapped[str] = mapped_column(String(32))
+    product_id: Mapped[str] = mapped_column(String(32), index=True)
     demand_quantity: Mapped[int] = mapped_column(Integer)
 
 

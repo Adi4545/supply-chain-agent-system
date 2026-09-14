@@ -7,11 +7,11 @@ import asyncio
 import csv
 import json
 import time
-from datetime import datetime
 from pathlib import Path
 
 from agents.orchestrator import OrchestratorAgent
 from config.settings import get_settings
+from core.time import utc_now
 from environment.simulator import SimulatedEnvironment
 from experiments.configs import AGENT_CONFIGS
 from experiments.metrics import aggregate_run_metrics
@@ -29,10 +29,11 @@ async def run_single(
     llm = MockLLMProvider()
     orchestrator = OrchestratorAgent(env, llm)
     scenario = next(s for s in CANONICAL_SCENARIOS if s.name == scenario_name)
+    agents = AGENT_CONFIGS[config_name]
 
     start = time.perf_counter()
     try:
-        state = await orchestrator.run(scenario.request)
+        state = await orchestrator.run(scenario.request, agents=agents)
         status = "completed"
     except Exception as exc:
         from models.schemas import ExecutionStatus
@@ -56,7 +57,7 @@ async def run_single(
     metrics["config"] = config_name
     metrics["seed"] = seed
     metrics["status"] = status
-    metrics["agents"] = AGENT_CONFIGS[config_name]
+    metrics["agents"] = ",".join(AGENT_CONFIGS[config_name])
     return metrics
 
 
@@ -113,7 +114,7 @@ def main() -> None:
     else:
         configs = [c.strip() for c in args.configs.split(",")]
 
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
     output_dir = Path(args.output or f"results/{timestamp}")
 
     results = asyncio.run(run_all(configs, output_dir))

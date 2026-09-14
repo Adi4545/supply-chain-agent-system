@@ -2,46 +2,33 @@
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from agents.orchestrator import OrchestratorAgent
-from config.settings import Settings, get_settings
+from api.dependencies import get_env, get_orchestrator
+from core.time import utc_now
 from environment.disruption import DisruptionEngine
 from environment.simulator import SimulatedEnvironment
-from llm.mock_provider import MockLLMProvider
+from experiments.configs import AGENT_CONFIGS
 from models.schemas import (
     DisruptionEvent,
     ExecutionStatus,
     PlanRequest,
     PlanResponse,
+    Product,
+    Supplier,
     UserRequest,
 )
 from models.state import SupplyChainState
 
 router = APIRouter()
 
-# In-memory run store for trace retrieval
 _run_store: dict[str, SupplyChainState] = {}
 _latest_results_dir: Path | None = None
-
-
-def get_env(settings: Settings = Depends(get_settings)) -> SimulatedEnvironment:
-    """Dependency: get or create seeded environment."""
-    env = SimulatedEnvironment(db_url=settings.db_url, seed=settings.random_seed)
-    env.seed()
-    return env
-
-
-def get_orchestrator(
-    env: SimulatedEnvironment = Depends(get_env),
-) -> OrchestratorAgent:
-    """Dependency: create orchestrator."""
-    return OrchestratorAgent(env, MockLLMProvider())
 
 
 class DisruptionRequest(BaseModel):
@@ -74,6 +61,37 @@ class TraceResponse(BaseModel):
     status: ExecutionStatus
 
 
+class ExperimentRunResponse(BaseModel):
+    """Experiment batch status."""
+
+    status: str
+    runs: int = 0
+    output_dir: str = ""
+
+
+class ExperimentResultsResponse(BaseModel):
+    """Latest experiment results metadata."""
+
+    status: str
+    message: str | None = None
+    output_dir: str | None = None
+    results: list[dict[str, Any]] | None = None
+
+
+def _plan_response(orchestrator: OrchestratorAgent, state: SupplyChainState) -> PlanResponse:
+    """Build a plan response including KPI snapshot fields."""
+    return PlanResponse(
+        run_id=state.run_id,
+        status=state.execution_status,
+        final_decision=state.final_decision,
+        trace_summary=orchestrator.get_trace_summary(state),
+        inventory=state.inventory,
+        demand_forecast=state.demand_forecast,
+        reorder_quantity=state.reorder_quantity,
+        forecast_confidence=state.forecast_confidence,
+    )
+
+
 @router.post("/plan", response_model=PlanResponse)
 async def plan(
     request: PlanRequest,
@@ -88,12 +106,7 @@ async def plan(
     )
     state = await orchestrator.run(user_request)
     _run_store[state.run_id] = state
-    return PlanResponse(
-        run_id=state.run_id,
-        status=state.execution_status,
-        final_decision=state.final_decision,
-        trace_summary=orchestrator.get_trace_summary(state),
-    )
+    return _plan_response(orchestrator, state)
 
 
 @router.get("/inventory/{product_id}", response_model=InventoryResponse)
@@ -106,22 +119,22 @@ def get_inventory(
     return InventoryResponse(product_id=product_id, quantity=qty)
 
 
-@router.get("/suppliers")
+@router.get("/suppliers", response_model=list[Supplier])
 def list_suppliers(
     product_id: str = "P001",
     env: SimulatedEnvironment = Depends(get_env),
-) -> list[dict]:
+) -> list[Supplier]:
     """List suppliers for a product."""
-    return [s.model_dump() for s in env.get_suppliers(product_id)]
+    return env.get_suppliers(product_id)
 
 
-@router.get("/products")
-def list_products(env: SimulatedEnvironment = Depends(get_env)) -> list[dict]:
+@router.get("/products", response_model=list[Product])
+def list_products(env: SimulatedEnvironment = Depends(get_env)) -> list[Product]:
     """List all products."""
-    return [p.model_dump() for p in env.list_products()]
+    return env.list_products()
 
 
-@router.post("/simulate-disruption")
+@router.post("/simulate-disruption", response_model=PlanResponse)
 async def simulate_disruption(
     request: DisruptionRequest,
     orchestrator: OrchestratorAgent = Depends(get_orchestrator),
@@ -136,46 +149,44 @@ async def simulate_disruption(
     mutation = engine.apply(request.disruption)
     state = await orchestrator.replan(state, request.disruption, mutation)
     _run_store[state.run_id] = state
-
-    return PlanResponse(
-        run_id=state.run_id,
-        status=state.execution_status,
-        final_decision=state.final_decision,
-        trace_summary=orchestrator.get_trace_summary(state),
-    )
+    return _plan_response(orchestrator, state)
 
 
-@router.post("/run-experiment")
-async def run_experiment(request: ExperimentRequest) -> dict:
+@router.post("/run-experiment", response_model=ExperimentRunResponse)
+async def run_experiment(request: ExperimentRequest) -> ExperimentRunResponse:
     """Launch experiment batch."""
     global _latest_results_dir
     from experiments.runner import run_all, save_results
-    from datetime import datetime
 
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
     output_dir = Path(f"results/{timestamp}")
-    configs = list(__import__("experiments.configs", fromlist=["AGENT_CONFIGS"]).AGENT_CONFIGS.keys())
+    configs = list(AGENT_CONFIGS.keys())
     if request.configs != "all":
         configs = [c.strip() for c in request.configs.split(",")]
 
     results = await run_all(configs, output_dir)
     save_results(results, output_dir)
     _latest_results_dir = output_dir
-    return {"status": "completed", "runs": len(results), "output_dir": str(output_dir)}
+    return ExperimentRunResponse(status="completed", runs=len(results), output_dir=str(output_dir))
 
 
-@router.get("/experiment-results")
-def get_experiment_results() -> dict:
+@router.get("/experiment-results", response_model=ExperimentResultsResponse)
+def get_experiment_results() -> ExperimentResultsResponse:
     """Get latest experiment results metadata."""
     if _latest_results_dir is None or not _latest_results_dir.exists():
-        return {"status": "no_results", "message": "No experiments run yet"}
+        return ExperimentResultsResponse(status="no_results", message="No experiments run yet")
     json_path = _latest_results_dir / "results.json"
     if json_path.exists():
         import json
+
         with open(json_path) as f:
             data = json.load(f)
-        return {"status": "ok", "output_dir": str(_latest_results_dir), "results": data}
-    return {"status": "no_results"}
+        return ExperimentResultsResponse(
+            status="ok",
+            output_dir=str(_latest_results_dir),
+            results=data,
+        )
+    return ExperimentResultsResponse(status="no_results")
 
 
 @router.get("/execution-trace/{run_id}", response_model=TraceResponse)

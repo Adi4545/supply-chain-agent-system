@@ -60,3 +60,19 @@ async def test_inventory_only_skips_logistics(orchestrator: OrchestratorAgent) -
     )
     assert state.execution_status == ExecutionStatus.COMPLETED
     assert state.selected_transport is None
+
+
+@pytest.mark.asyncio
+async def test_infeasible_budget_still_completes(orchestrator: OrchestratorAgent) -> None:
+    """Tight budget should not crash the pipeline; it flags the infeasibility."""
+    state = await orchestrator.run(
+        UserRequest(
+            objective="Plan replenishment for product P001",
+            product_id="P001",
+            budget=100.0,
+        )
+    )
+    assert state.execution_status == ExecutionStatus.COMPLETED
+    assert state.final_decision is not None
+    assert state.errors
+    assert any("infeasible" in err.lower() for err in state.errors)

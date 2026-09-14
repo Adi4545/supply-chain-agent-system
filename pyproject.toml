@@ -51,3 +51,6 @@ include = [
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["."]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

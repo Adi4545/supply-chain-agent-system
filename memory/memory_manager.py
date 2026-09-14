@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from core.time import utc_now
 from models.database_models import Base, create_db_engine, create_session_factory
 from models.schemas import FinalDecision
 
@@ -57,7 +58,7 @@ class DecisionRecordORM(Base):
     product_id: Mapped[str] = mapped_column(String(32))
     decision_json: Mapped[str] = mapped_column(Text)
     context_json: Mapped[str] = mapped_column(Text, default="{}")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class DisruptionRecordORM(Base):
@@ -68,7 +69,7 @@ class DisruptionRecordORM(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     disruption_type: Mapped[str] = mapped_column(String(64))
     details_json: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class SQLiteMemoryStore(MemoryManager):

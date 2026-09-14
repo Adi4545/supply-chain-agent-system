@@ -13,7 +13,7 @@ from agents.logistics import LogisticsAgent
 from agents.procurement import ProcurementAgent
 from agents.risk import RiskAgent
 from config.settings import Settings, get_settings
-from core.exceptions import AgentTimeoutError, OptimizationInfeasible
+from core.exceptions import AgentTimeoutError, AgentValidationError, OptimizationInfeasible
 from core.trace import build_trace_summary
 from environment.disruption import DisruptionEngine
 from environment.protocol import Environment
@@ -46,6 +46,18 @@ class OrchestratorAgent:
         self.procurement_agent = ProcurementAgent(env)
         self.logistics_agent = LogisticsAgent(env)
         self.risk_agent = RiskAgent(env)
+        self.agent_map = {
+            "demand_agent": self.demand_agent,
+            "inventory_agent": self.inventory_agent,
+            "procurement_agent": self.procurement_agent,
+            "logistics_agent": self.logistics_agent,
+            "risk_agent": self.risk_agent,
+            "demand_anomaly_agent": self.demand_agent,
+            "capacity_agent": self.inventory_agent,
+            "reliability_agent": self.procurement_agent,
+            "transport_cost_agent": self.logistics_agent,
+            "disruption_risk_agent": self.risk_agent,
+        }
 
     def _determine_agents(self, request: UserRequest) -> list[str]:
         """Decide which agents to invoke based on user objective."""
@@ -193,7 +205,11 @@ class OrchestratorAgent:
             ),
             supplier_risk=risk_scores.supplier_risk if risk_scores else 0.3,
             transport_risk=risk_scores.transport_risk if risk_scores else 0.2,
-            budget=state.constraints.budget or state.user_request.budget if state.user_request else None,
+            budget=(
+                state.constraints.budget
+                if state.constraints.budget is not None
+                else (state.user_request.budget if state.user_request else None)
+            ),
             delivery_deadline_days=(
                 state.constraints.delivery_deadline_days
                 or (state.user_request.delivery_deadline_days if state.user_request else None)
@@ -231,6 +247,7 @@ class OrchestratorAgent:
         ]
         if conflict:
             assumptions.append(f"Conflict resolved: {conflict.rationale}")
+        assumptions.extend(state.errors)
 
         if order_qty > self.settings.safety.max_order_quantity:
             assumptions.append(
@@ -259,38 +276,45 @@ class OrchestratorAgent:
             requires_human_approval=requires_approval,
         )
 
-    async def run(self, request: UserRequest) -> SupplyChainState:
+    async def run(
+        self,
+        request: UserRequest,
+        agents: list[str] | None = None,
+    ) -> SupplyChainState:
         """Execute full planning pipeline."""
         start = time.perf_counter()
         state = SupplyChainState(seed=self.settings.random_seed)
         state.user_request = request
         state.execution_status = ExecutionStatus.RUNNING
+        if request.budget is not None:
+            state.constraints.budget = request.budget
+        if request.delivery_deadline_days is not None:
+            state.constraints.delivery_deadline_days = request.delivery_deadline_days
 
         try:
             state.product = self.env.get_product(request.product_id)
-            agents_to_run = self._determine_agents(request)
+            agents_to_run = agents or self._determine_agents(request)
             logger.info("orchestrator.start", run_id=state.run_id, agents=agents_to_run)
-
-            agent_map = {
-                "demand_agent": self.demand_agent,
-                "inventory_agent": self.inventory_agent,
-                "procurement_agent": self.procurement_agent,
-                "logistics_agent": self.logistics_agent,
-                "risk_agent": self.risk_agent,
-            }
 
             for agent_name in agents_to_run:
                 elapsed = time.perf_counter() - start
                 if elapsed > self.settings.orch.total_timeout_seconds:
                     raise AgentTimeoutError("orchestrator", self.settings.orch.total_timeout_seconds)
 
-                agent = agent_map[agent_name]
-                state_slice = self._get_state_slice(state, agent_name)
+                agent = self.agent_map.get(agent_name)
+                if agent is None:
+                    raise AgentValidationError("orchestrator", f"Unknown agent '{agent_name}'")
+                state_slice = self._get_state_slice(state, agent.name)
                 output = await agent.run(state, state_slice, self.llm)
-                self._apply_agent_output(state, agent_name, output)
+                self._apply_agent_output(state, agent.name, output)
 
             conflict = self._resolve_conflicts(state)
-            self._run_optimizer(state)
+            try:
+                self._run_optimizer(state)
+            except OptimizationInfeasible as exc:
+                state.append_error(str(exc))
+                if state.total_cost is None:
+                    state.update_field("optimizer", "total_cost", 0.0)
             final = self._build_final_decision(state, conflict)
             state.update_field("orchestrator", "final_decision", final)
             state.execution_status = ExecutionStatus.COMPLETED
@@ -324,14 +348,6 @@ class OrchestratorAgent:
         disruption_type = DisruptionType(disruption.disruption_type)
         agents_to_reinvoke = DisruptionEngine.get_reinvoke_agents(disruption_type)
 
-        agent_map = {
-            "demand_agent": self.demand_agent,
-            "inventory_agent": self.inventory_agent,
-            "procurement_agent": self.procurement_agent,
-            "logistics_agent": self.logistics_agent,
-            "risk_agent": self.risk_agent,
-        }
-
         # Apply demand spike to state if needed
         if disruption_type == DisruptionType.DEMAND_SPIKE and state.demand_forecast:
             multiplier = mutation.get("demand_multiplier", 1.4)
@@ -342,13 +358,16 @@ class OrchestratorAgent:
             )
 
         for agent_name in agents_to_reinvoke:
-            agent = agent_map.get(agent_name)
+            agent = self.agent_map.get(agent_name)
             if agent:
-                state_slice = self._get_state_slice(state, agent_name)
+                state_slice = self._get_state_slice(state, agent.name)
                 output = await agent.run(state, state_slice, self.llm)
-                self._apply_agent_output(state, agent_name, output)
+                self._apply_agent_output(state, agent.name, output)
 
-        self._run_optimizer(state)
+        try:
+            self._run_optimizer(state)
+        except OptimizationInfeasible as exc:
+            state.append_error(str(exc))
         conflict = self._resolve_conflicts(state)
         final = self._build_final_decision(state, conflict)
         final.revision_reason = f"Replan after {disruption_type.value}"

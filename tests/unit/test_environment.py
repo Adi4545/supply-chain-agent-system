@@ -65,6 +65,14 @@ def test_get_transport_options(env: SimulatedEnvironment) -> None:
     assert "ground" in modes
 
 
+def test_cache_survives_repeated_reads(env: SimulatedEnvironment) -> None:
+    """Repeated reads should not require a reseed."""
+    first = env.get_product("P001")
+    second = env.get_product("P001")
+    assert first.product_id == second.product_id
+    assert env.get_inventory("P001") == 3500
+
+
 def test_reproducible_seed(env: SimulatedEnvironment, tmp_path) -> None:
     """Two environments with same seed should have identical demand."""
     env2 = SimulatedEnvironment(

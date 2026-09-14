@@ -44,6 +44,8 @@ def test_plan_endpoint() -> None:
     assert data["status"] == "completed"
     assert data["final_decision"]["requires_human_approval"] is True
     assert "Orchestrator" in data["trace_summary"]
+    assert data["inventory"] == 3500
+    assert data["demand_forecast"] is not None
 
 
 def test_execution_trace() -> None:

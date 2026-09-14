@@ -104,3 +104,7 @@ class MockLLMProvider(LLMProvider):
         """Reset call indices for a new run."""
         self._call_index.clear()
         self.total_tokens = 0
+
+    def reset_agent(self, agent_name: str) -> None:
+        """Reset the tool-call cursor for one agent so it can be re-invoked."""
+        self._call_index.pop(agent_name, None)

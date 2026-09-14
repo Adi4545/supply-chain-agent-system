@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from core.time import utc_now
+
 
 class RiskLevel(str, Enum):
     """Overall risk classification."""
@@ -123,7 +125,7 @@ class Constraints(BaseModel):
 class TraceEntry(BaseModel):
     """Single observability trace record."""
 
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     run_id: str
     agent: str
     step: str
@@ -143,7 +145,7 @@ class AgentMessage(BaseModel):
     correlation_id: str = Field(default_factory=lambda: str(uuid4()))
     agent: str
     message_type: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
 
 
 class DemandForecastMessage(AgentMessage):
@@ -268,6 +270,10 @@ class PlanResponse(BaseModel):
     status: ExecutionStatus
     final_decision: FinalDecision | None = None
     trace_summary: str = ""
+    inventory: int | None = None
+    demand_forecast: int | None = None
+    reorder_quantity: int | None = None
+    forecast_confidence: float | None = None
 
 
 class DisruptionType(str, Enum):

@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from api.dependencies import get_env
 from config.settings import get_settings
 from core.logging import configure_logging
 
@@ -17,6 +18,12 @@ app = FastAPI(
     version="0.1.0",
     description="Tool-using multi-agent supply chain planning API",
 )
+
+
+@app.on_event("startup")
+def _seed_environment() -> None:
+    """Warm the environment cache once at process start."""
+    get_env()
 
 # Register routes
 from api.routes import router  # noqa: E402

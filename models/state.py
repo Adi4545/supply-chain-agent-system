@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from core.exceptions import OwnershipViolation
 from core.ownership import validate_ownership
+from core.time import utc_now
 from models.schemas import (
     Constraints,
     ExecutionStatus,
@@ -30,8 +31,8 @@ class SupplyChainState(BaseModel):
 
     run_id: str = Field(default_factory=lambda: str(uuid4()))
     seed: int = 42
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     user_request: UserRequest | None = None
     product: Product | None = None
@@ -68,7 +69,7 @@ class SupplyChainState(BaseModel):
         if not hasattr(self, field):
             raise OwnershipViolation(agent, field)
         setattr(self, field, value)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = utc_now()
 
     def update_slice(self, agent: str, payload: dict[str, Any]) -> None:
         """Update multiple owned fields from a payload dict."""
@@ -78,18 +79,18 @@ class SupplyChainState(BaseModel):
     def append_trace(self, entry: TraceEntry) -> None:
         """Append an observability trace entry."""
         self.trace.append(entry)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = utc_now()
 
     def append_error(self, error: str) -> None:
         """Record an error message."""
         self.errors.append(error)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = utc_now()
 
     def increment_agent_iteration(self, agent: str) -> int:
         """Increment and return iteration count for an agent."""
         current = self.agent_iterations.get(agent, 0) + 1
         self.agent_iterations[agent] = current
-        self.updated_at = datetime.utcnow()
+        self.updated_at = utc_now()
         return current
 
     def get_slice(self, fields: list[str]) -> dict[str, Any]:

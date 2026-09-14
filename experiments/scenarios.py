@@ -39,7 +39,7 @@ CANONICAL_SCENARIOS: list[Scenario] = [
         request=UserRequest(
             objective="Plan replenishment for product P001",
             product_id="P001",
-            budget=50000.0,
+            budget=250000.0,
         ),
     ),
 ]

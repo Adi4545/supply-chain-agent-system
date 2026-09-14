@@ -95,6 +95,9 @@ class DisruptionEngine:
         finally:
             session.close()
 
+        self.env.invalidate_cache()
+        self.env._warm_cache()
+
         mutation["recovery_time_ms"] = (time.perf_counter() - start) * 1000
         mutation["affected_fields"] = DISRUPTION_AFFECTED_FIELDS.get(event.disruption_type, [])
         mutation["reinvoke_agents"] = DISRUPTION_REINVOKE_AGENTS.get(event.disruption_type, [])
