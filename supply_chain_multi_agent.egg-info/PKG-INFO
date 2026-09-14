@@ -1,0 +1,24 @@
+Metadata-Version: 2.4
+Name: supply-chain-multi-agent
+Version: 0.1.0
+Summary: Production-quality supply chain multi-agent AI system
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn[standard]>=0.27
+Requires-Dist: pydantic>=2.6
+Requires-Dist: pydantic-settings>=2.2
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: ortools>=9.9
+Requires-Dist: pandas>=2.2
+Requires-Dist: numpy>=1.26
+Requires-Dist: structlog>=24.1
+Requires-Dist: tenacity>=8.2
+Requires-Dist: httpx>=0.27
+Requires-Dist: python-dotenv>=1.0
+Requires-Dist: aiosqlite>=0.20
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Provides-Extra: openai
+Requires-Dist: openai>=1.0; extra == "openai"

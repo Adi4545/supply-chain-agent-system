@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supply-chain-multi-agent"
+version = "0.1.0"
+description = "Production-quality supply chain multi-agent AI system"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "sqlalchemy>=2.0",
+    "ortools>=9.9",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "structlog>=24.1",
+    "tenacity>=8.2",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+    "aiosqlite>=0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+openai = ["openai>=1.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "agents*",
+    "tools*",
+    "models*",
+    "optimization*",
+    "memory*",
+    "environment*",
+    "experiments*",
+    "api*",
+    "llm*",
+    "core*",
+    "config*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]
