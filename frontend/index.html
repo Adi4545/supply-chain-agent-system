@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supply Chain Multi-Agent Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Supply Chain Planning Dashboard</h1>
+    <p class="subtitle">Multi-agent AI recommendation system — all decisions require human approval</p>
+  </header>
+
+  <main>
+    <section class="controls">
+      <button id="runPlanBtn" class="btn primary">Run Planning Pipeline</button>
+      <div class="disruption-panel">
+        <label for="disruptionType">Simulate Disruption:</label>
+        <select id="disruptionType">
+          <option value="supplier_unavailable">Supplier Unavailable</option>
+          <option value="demand_spike">Demand Spike (+40%)</option>
+          <option value="transport_cost_up">Transport Cost Up (+30%)</option>
+          <option value="lead_time_doubled">Lead Time Doubled</option>
+          <option value="warehouse_capacity_reduced">Warehouse Capacity Reduced</option>
+          <option value="multi_supplier_outage">Multi Supplier Outage</option>
+        </select>
+        <button id="disruptBtn" class="btn warn" disabled>Apply Disruption</button>
+      </div>
+    </section>
+
+    <section id="kpis" class="kpi-grid">
+      <div class="kpi"><span class="label">Inventory</span><span id="kpiInventory" class="value">—</span></div>
+      <div class="kpi"><span class="label">Forecast Demand</span><span id="kpiDemand" class="value">—</span></div>
+      <div class="kpi"><span class="label">Reorder Qty</span><span id="kpiReorder" class="value">—</span></div>
+      <div class="kpi"><span class="label">Total Cost</span><span id="kpiCost" class="value">—</span></div>
+      <div class="kpi"><span class="label">Risk Level</span><span id="kpiRisk" class="value">—</span></div>
+      <div class="kpi"><span class="label">Delivery Days</span><span id="kpiDelivery" class="value">—</span></div>
+    </section>
+
+    <section class="grid-2">
+      <div class="card">
+        <h2>Final Decision</h2>
+        <div id="decisionBadge" class="badge">Awaiting plan</div>
+        <div id="finalDecision" class="content">Click "Run Planning Pipeline" to start.</div>
+      </div>
+      <div class="card">
+        <h2>Agent Execution Trace</h2>
+        <pre id="trace" class="trace">—</pre>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Supplier Comparison</h2>
+      <table id="supplierTable">
+        <thead><tr><th>Supplier</th><th>Price</th><th>Lead Time</th><th>Capacity</th><th>Reliability</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
